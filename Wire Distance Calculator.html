@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wire Spool Distance Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h2 {
+            color: #333;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        input[type="number"], input[type="submit"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        input[type="submit"] {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #45a049;
+        }
+        #output {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #ddd;
+            border-radius: 4px;
+            color: #333;
+            font-size: 1.2em;
+        }
+        /* The switch - the box around the slider */
+        .switch {
+          position: relative;
+          display: inline-block;
+          width: 60px;
+          height: 34px;
+          margin: 10px 0;
+          margin-bottom: 20px;
+        }
+        /* Hide default HTML checkbox */
+        .switch input {
+          opacity: 0;
+          width: 0;
+          height: 0;
+        }
+        /* The slider */
+        .slider {
+          position: absolute;
+          cursor: pointer;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background-color: #ccc;
+          transition: .4s;
+        }
+        .slider:before {
+          position: absolute;
+          content: "";
+          height: 26px;
+          width: 26px;
+          left: 4px;
+          bottom: 4px;
+          background-color: white;
+          transition: .4s;
+        }
+        input:checked + .slider {
+          background-color: #45a049;
+        }
+        input:focus + .slider {
+          box-shadow: 0 0 1px #45a049;
+        }
+        input:checked + .slider:before {
+          transform: translateX(26px);
+        }
+        /* Rounded sliders */
+        .slider.round {
+          border-radius: 34px;
+        }
+        .slider.round:before {
+          border-radius: 50%;
+        }
+    </style>
+</head>
+<body>
+    <h2>Wire Spool Distance Calculator</h2>
+    <form id="wireForm">
+        <label for="wireSize">Enter wire size (AWG, kcmil, or Strands/AWG):</label>
+        <input type="text" id="wireSize" required pattern="[0-9]{1,2}|[0]{1,4}|([0-9]{1,2}/[0-9]{1,2})" title="Please enter a valid AWG size (0-24), kcmil (0, 00, 000, 0000), or Strands/AWG">
+        
+        <label for="temperature">Enter wire temperature (Celsius):</label>
+        <input type="number" id="temperature" required value=20>
+        
+        <label for="measuredResistance">Enter measured resistance (milli-ohms):</label>
+        <input type="number" id="measuredResistance" step="any" required>
+
+        <label for="strandedToggle">Stranded Wire:</label>
+        <label class="switch">
+          <input type="checkbox" id="strandedToggle" checked>
+          <span class="slider round"></span>
+        </label>
+
+        <input type="submit" value="Calculate Distance">
+    </form>
+    
+    <div id="output"></div>
+    
+    <script>
+        document.getElementById('wireForm').addEventListener('submit', function(event) {
+            event.preventDefault(); // Prevent form from submitting the traditional way
+            calculateWireDistance();
+        });
+
+        document.getElementById('wireSize').addEventListener('input', function() {
+            const wireSize = document.getElementById('wireSize').value;
+            const strandedCheckbox = document.getElementById('strandedToggle');
+            if (wireSize.includes('/')) {
+                strandedCheckbox.checked = true; // Auto-check and disable if Strands/AWG
+                strandedCheckbox.disabled = true;
+            } else {
+                // strandedCheckbox.checked = true; // Check and enable otherwise
+                strandedCheckbox.disabled = false;
+            }
+        });
+
+        function tempCorrection(resistance, temperature) {
+            const alpha = 0.00393;
+            const tempDelta = temperature - 20;
+            return resistance * (1 + alpha * tempDelta);
+        }
+
+        function resistancePerFootAWG(awg) {
+            const rhoCopper = 1.724e-8;
+            const meterToFeet = 3.28084;
+            const diameterMeters = 0.127 * Math.pow(92, (36 - awg) / 39) * 0.001;
+            const areaMetersSquared = Math.PI * diameterMeters ** 2 / 4;
+            const resistancePerMeter = 1000 * rhoCopper / areaMetersSquared;
+            return resistancePerMeter / meterToFeet;
+        }
+
+        function calculateResistance(wireSize, temperature) {
+            let resistance;
+            if (wireSize == "00") {
+                resistance = resistancePerFootAWG(-1);
+            } else if (wireSize == "000") {
+                resistance = resistancePerFootAWG(-2);
+            } else if (wireSize == "0000") {
+                resistance = resistancePerFootAWG(-3);
+            } else if (wireSize.includes('/')) {
+                var wire = wireSize.split('/');
+                var strands = parseInt(wire[0]);
+                var size = parseInt(wire[1]);
+                resistance = resistancePerFootAWG(size) / strands;
+            }
+            else {
+                resistance = resistancePerFootAWG(parseInt(wireSize));
+            }
+            
+            resistance = tempCorrection(resistance, temperature);
+            if (document.getElementById('strandedToggle').checked && !document.getElementById('strandedToggle').disabled) {
+                resistance *= 1.07260121343;
+            }
+            return resistance;
+        }
+
+        function calculateWireDistance() {
+            const wireSize = document.getElementById('wireSize').value.trim();
+            const temperature = parseInt(document.getElementById('temperature').value);
+            const measuredResistance = parseFloat(document.getElementById('measuredResistance').value);
+
+            let resolution;
+            let percentError = 0.005;
+            
+            if (measuredResistance < 20) { 
+                resolution = 0.01; 
+                percentError = 0.01; 
+            } else if (measuredResistance < 200) { 
+                resolution = 0.1; 
+            } else if (measuredResistance < 2000) { 
+                resolution = 1; 
+            } else if (measuredResistance < 20000) { 
+                resolution = 10; 
+            } else if (measuredResistance < 200000) { 
+                resolution = 100; 
+            } else { 
+                resolution = 1000; 
+            }
+            
+            const error = {percent: percentError, counts: 3, resolution: resolution};
+            const resistance = calculateResistance(wireSize, temperature);
+            let adjustedResistance = measuredResistance / (1 + error.percent) - error.counts * error.resolution;
+            if (adjustedResistance < 0) {
+                adjustedResistance += error.counts * error.resolution;
+            }
+            const distance = adjustedResistance / resistance;
+
+            if (distance !== undefined) {
+                const feet = Math.floor(distance);
+                const inches = Math.floor((distance - feet) * 12);
+                document.getElementById('output').innerHTML = `Wire distance ≥ ${feet} FT ${inches} IN`;
+            } else {
+                document.getElementById('output').innerHTML = "Error in calculation. Please check your inputs.";
+            }
+        }
+    </script>
+</body>
+</html>
+
